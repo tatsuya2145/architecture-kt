@@ -1,8 +1,0 @@
-
-interface royle {
-
-}
-
-fun main() {
-
-}
