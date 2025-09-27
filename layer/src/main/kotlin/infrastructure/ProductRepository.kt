@@ -1,28 +1,36 @@
 package infrastructure
 
 import org.ktorm.dsl.*
-import org.ktorm.entity.Entity
 import org.ktorm.entity.find
 import org.ktorm.entity.sequenceOf
-import org.ktorm.schema.Table
 import org.ktorm.schema.int
 import org.ktorm.schema.varchar
 import com.github.michaelbull.result.*
-import org.ktorm.entity.update
+import org.ktorm.schema.BaseTable
+import org.ktorm.support.postgresql.insertOrUpdate
 
-
-interface ProductEntity : Entity<ProductEntity> {
-    companion object : Entity.Factory<ProductEntity>()
-
-    var id: Int
-    var name: String
+data class ProductEntity(
+    val id: Int,
+    var name: String,
     var count: Int
-}
+)
 
-object ProductTable : Table<ProductEntity>("products") {
-    val id = int("id").primaryKey().bindTo { it.id }
-    val name = varchar("name").bindTo { it.name }
-    val count = int("count").bindTo { it.count }
+open class ProductTable(alias: String?) : BaseTable<ProductEntity>("products", alias) {
+    val id = int("id").primaryKey()
+    val name = varchar("name")
+    val count = int("count")
+
+    override fun aliased(alias: String) = ProductTable(alias)
+
+    override fun doCreateEntity(row: QueryRowSet, withReferences: Boolean): ProductEntity {
+        return ProductEntity(
+            id = row.getValue(id),
+            name = row.getValue(name),
+            count = row.getValue(count),
+        )
+    }
+
+    companion object : ProductTable(null)
 }
 
 
@@ -31,12 +39,35 @@ fun findProduct(
 ): Result<ProductEntity, String>  {
     return db.sequenceOf(ProductTable)
             .find { it.id eq productId }
-        .toResultOr { "not found" }
+        .toResultOr {
+            "not found"
+        }
+}
+
+fun updateProduct(
+    productEntity: ProductEntity
+) {
+    db.update(ProductTable) {
+        set(it.name, productEntity.name)
+        set(it.count, productEntity.count)
+        where {
+            it.id eq productEntity.id
+        }
+    }
 }
 
 fun saveProduct(
     productEntity: ProductEntity
 ) {
-    db.sequenceOf(ProductTable)
-        .update(productEntity)
+    db.insertOrUpdate(ProductTable) {
+        set(it.id, productEntity.id)
+        set(it.name, productEntity.name)
+        set(it.count, productEntity.count)
+        onConflict(it.id) {
+            set(it.name, productEntity.name)
+            set(it.count, productEntity.count)
+        }
+    }
 }
+
+
